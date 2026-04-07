@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>미니게임 프로토타입 v0.1</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: monospace; }
+canvas { display: block; touch-action: none; }
+#info { color: #555; font-size: 11px; margin-top: 6px; letter-spacing: 0.5px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="info">PROTOTYPE · 터치 또는 ← → 키로 이동</div>
+<script>
+// ── 캔버스 설정 ─────────────────────────────────
+const W = 360, H = 640;
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+
+function resize() {
+  const scale = Math.min(window.innerWidth / W, (window.innerHeight - 30) / H);
+  c.width = W; c.height = H;
+  c.style.width  = (W * scale) + 'px';
+  c.style.height = (H * scale) + 'px';
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── 상태 ────────────────────────────────────────
+let state = 'menu';   // menu | playing | gate | levelClear | gameOver
+let stage = 1;
+let score = 0;
+let shotPower = 1;    // 동시 총알 수
+
+// ── 플레이어 ─────────────────────────────────────
+const player = { x: W/2, y: H - 90, w: 52, h: 32, speed: 5 };
+
+// ── 입력 ─────────────────────────────────────────
+const keys = {};
+let touchTargetX = null;
+let lastTouchTime = 0;
+
+document.addEventListener('keydown', e => { keys[e.key] = true; e.preventDefault && ['ArrowLeft','ArrowRight'].includes(e.key) && e.preventDefault(); });
+document.addEventListener('keyup',   e => { keys[e.key] = false; });
+
+c.addEventListener('touchstart', e => {
+  lastTouchTime = Date.now();
+  const rect = c.getBoundingClientRect();
+  touchTargetX = (e.touches[0].clientX - rect.left) * (W / rect.width);
+  handlePointer(touchTargetX, (e.touches[0].clientY - rect.top) * (H / rect.height));
+}, { passive: true });
+
+c.addEventListener('touchmove', e => {
+  const rect = c.getBoundingClientRect();
+  touchTargetX = (e.touches[0].clientX - rect.left) * (W / rect.width);
+}, { passive: true });
+
+c.addEventListener('touchend', () => { touchTargetX = null; }, { passive: true });
+
+c.addEventListener('click', e => {
+  if (Date.now() - lastTouchTime < 500) return;
+  const rect = c.getBoundingClientRect();
+  handlePointer(
+    (e.clientX - rect.left) * (W / rect.width),
+    (e.clientY - rect.top)  * (H / rect.height)
+  );
+});
+
+// ── 게임 오브젝트 ────────────────────────────────
+let bullets    = [];
+let enemies    = [];
+let gates      = [];
+let particles  = [];
+let lastShot   = 0;
+let enemyDir   = 1;
+let gateUsed   = false;
+let gateLock   = false;
+
+const SHOT_MS  = 480;
+const DROP_Y   = 28;
+
+// ── 팩토리 ───────────────────────────────────────
+function makeEnemies() {
+  enemies = []; gateUsed = false; gateLock = false; gates = [];
+  const cols = 6, rows = Math.min(2 + stage, 5);
+  for (let r = 0; r < rows; r++)
+    for (let c2 = 0; c2 < cols; c2++)
+      enemies.push({ x: 32 + c2 * 50, y: 55 + r * 48, w: 38, h: 28, alive: true });
+}
+
+function startGame() {
+  stage = 1; score = 0; shotPower = 1;
+  player.x = W / 2; bullets = []; particles = [];
+  makeEnemies(); state = 'playing';
+}
+
+function nextStage() {
+  stage++; shotPower = 1;
+  player.x = W / 2; bullets = []; particles = [];
+  makeEnemies(); state = 'playing';
+}
+
+// ── 업데이트 ─────────────────────────────────────
+function update(now) {
+  if (state !== 'playing') return;
+
+  // 이동
+  if (keys['ArrowLeft']  || keys['a'] || keys['A']) player.x -= player.speed;
+  if (keys['ArrowRight'] || keys['d'] || keys['D']) player.x += player.speed;
+  if (touchTargetX !== null) {
+    const dx = touchTargetX - player.x;
+    if (Math.abs(dx) > player.speed) player.x += Math.sign(dx) * player.speed;
+    else player.x = touchTargetX;
+  }
+  player.x = Math.max(player.w/2 + 4, Math.min(W - player.w/2 - 4, player.x));
+
+  // 자동 사격
+  if (now - lastShot > SHOT_MS) {
+    lastShot = now;
+    const spread = 14;
+    for (let i = 0; i < shotPower; i++) {
+      const ox = (i - (shotPower - 1) / 2) * spread;
+      bullets.push({ x: player.x + ox, y: player.y - player.h/2 - 5, vy: -11 });
+    }
+  }
+
+  // 총알 이동 & 범위 제거
+  bullets = bullets.filter(b => b.y > -20);
+  for (const b of bullets) b.y += b.vy;
+
+  // 적 이동
+  const alive = enemies.filter(e => e.alive);
+  if (alive.length === 0) { state = 'levelClear'; return; }
+
+  const spd = 0.6 + stage * 0.25;
+  let wallHit = false;
+  for (const e of alive) {
+    e.x += enemyDir * spd;
+    if (e.x > W - e.w/2 - 8 || e.x < e.w/2 + 8) wallHit = true;
+  }
+  if (wallHit) { enemyDir *= -1; for (const e of alive) e.y += DROP_Y; }
+
+  // 게임오버 판정
+  for (const e of alive) {
+    if (e.y + e.h/2 >= player.y - player.h/2) { state = 'gameOver'; return; }
+  }
+
+  // 게이트 트리거 (적 절반 처치 후 1회)
+  if (!gateUsed) {
+    const total = enemies.length;
+    const dead  = enemies.filter(e => !e.alive).length;
+    if (dead >= Math.ceil(total / 2)) {
+      gateUsed = true;
+      gates = [
+        { x: W * 0.25, y: H/2, w: 110, h: 64, label: '✕2 SHOT', sub: '총알 2배', action: 'double', color: '#3C6' },
+        { x: W * 0.75, y: H/2, w: 110, h: 64, label: '-5 적',   sub: '적 5마리 제거', action: 'remove', color: '#E74' },
+      ];
+      state = 'gate'; return;
+    }
+  }
+
+  // 총알-적 충돌
+  for (const b of bullets) {
+    for (const e of alive) {
+      if (!e.alive) continue;
+      if (Math.abs(b.x - e.x) < (5/2 + e.w/2) && Math.abs(b.y - e.y) < (13/2 + e.h/2)) {
+        e.alive = false; b.y = -999; score += 10;
+        explode(e.x, e.y, '#E44');
+      }
+    }
+  }
+
+  // 파티클
+  for (const p of particles) { p.x += p.vx; p.y += p.vy; p.life--; }
+  particles = particles.filter(p => p.life > 0);
+}
+
+function explode(x, y, col) {
+  for (let i = 0; i < 8; i++) {
+    const a = (Math.PI * 2 * i) / 8;
+    particles.push({ x, y, vx: Math.cos(a)*3.5, vy: Math.sin(a)*3.5, life: 18, color: col });
+  }
+}
+
+// ── 포인터 입력 처리 ──────────────────────────────
+function handlePointer(mx, my) {
+  if (state === 'menu') { startGame(); return; }
+  if (state === 'gameOver')   { startGame();  return; }
+  if (state === 'levelClear') { nextStage();  return; }
+  if (state === 'gate') {
+    if (gateLock) return;
+    for (let i = 0; i < gates.length; i++) {
+      const g = gates[i];
+      if (Math.abs(mx - g.x) < g.w/2 && Math.abs(my - g.y) < g.h/2) {
+        gateLock = true;
+        applyGate(i);
+        return;
+      }
+    }
+  }
+}
+
+function applyGate(i) {
+  const g = gates[i];
+  if (g.action === 'double') {
+    shotPower = Math.min(shotPower * 2, 8);
+  } else {
+    let n = 5;
+    for (let j = enemies.length - 1; j >= 0 && n > 0; j--) {
+      if (enemies[j].alive) { enemies[j].alive = false; score += 5; n--; }
+    }
+  }
+  gates = []; state = 'playing';
+}
+
+// ── 그리기 유틸 ──────────────────────────────────
+function rr(x, y, w, h, r = 6) {
+  ctx.beginPath();
+  ctx.roundRect(x - w/2, y - h/2, w, h, r);
+}
+
+function label(text, x, y, size = 9, col = '#FFF') {
+  ctx.font = `bold ${size}px monospace`;
+  ctx.fillStyle = col;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y);
+}
+
+// ── 렌더 ─────────────────────────────────────────
+function draw() {
+  // 배경
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, 0, W, H);
+
+  // 배경 안내 레이블
+  ctx.font = '10px monospace'; ctx.fillStyle = '#2A2A2A';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('[ BG : 배경 아트워크 들어갈 자리 ]', W/2, H - 14);
+
+  if (state === 'menu')       { drawMenu(); return; }
+
+  drawGame();
+
+  if (state === 'gate')       { drawGates(); }
+  if (state === 'levelClear') { drawOverlay('STAGE ' + stage + ' CLEAR! 🎉', '탭해서 다음 스테이지', '#4D6'); }
+  if (state === 'gameOver')   { drawOverlay('GAME OVER', '탭해서 다시 시작', '#E55'); }
+}
+
+function drawMenu() {
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+  ctx.font = 'bold 34px monospace'; ctx.fillStyle = '#FFF';
+  ctx.fillText('🎮 미니게임', W/2, 155);
+
+  ctx.font = '13px monospace'; ctx.fillStyle = '#777';
+  ctx.fillText('PROTOTYPE  v0.1', W/2, 188);
+
+  ctx.fillStyle = '#333';
+  ctx.fillRect(20, 208, W - 40, 1);
+
+  ctx.font = '13px monospace'; ctx.fillStyle = '#7AF';
+  const tips = ['← → 키 또는 터치 드래그: 이동', '총알: 자동 발사', '게이트: 파워업 선택', '적을 모두 물리치면 다음 스테이지!'];
+  tips.forEach((t, i) => ctx.fillText(t, W/2, 238 + i * 26));
+
+  // 플레이어 미리보기
+  ctx.fillStyle = '#2288CC'; rr(W/2, 430, 52, 32); ctx.fill();
+  ctx.strokeStyle = '#55AAEE'; ctx.lineWidth = 1.5; ctx.stroke();
+  label('PLAYER\n(캐릭터 스프라이트)', W/2, 430, 9);
+
+  // 총알
+  ctx.fillStyle = '#FFD700'; rr(W/2, 390, 6, 16, 3); ctx.fill();
+
+  // 적 미리보기
+  ctx.fillStyle = '#CC3333'; rr(W/2 - 60, 490, 38, 28); ctx.fill();
+  ctx.strokeStyle = '#FF6666'; ctx.lineWidth = 1; ctx.stroke();
+  label('ENEMY', W/2 - 60, 490, 8);
+  ctx.fillStyle = '#CC3333'; rr(W/2, 490, 38, 28); ctx.fill(); ctx.stroke();
+  label('ENEMY', W/2, 490, 8);
+  ctx.fillStyle = '#CC3333'; rr(W/2 + 60, 490, 38, 28); ctx.fill(); ctx.stroke();
+  label('ENEMY', W/2 + 60, 490, 8);
+
+  ctx.font = 'bold 19px monospace'; ctx.fillStyle = '#FFD700';
+  ctx.fillText('[ 탭 / 클릭해서 시작 ]', W/2, 568);
+}
+
+function drawGame() {
+  // HUD
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold 15px monospace'; ctx.fillStyle = '#FFF';
+  ctx.fillText('STAGE ' + stage, 12, 22);
+  ctx.textAlign = 'right';
+  ctx.fillText('SCORE ' + score, W - 12, 22);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#88CCFF';
+  ctx.font = '12px monospace';
+  ctx.fillText('SHOT ×' + shotPower, W/2, 22);
+
+  // 분리선
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, 36); ctx.lineTo(W, 36); ctx.stroke();
+
+  // 총알
+  for (const b of bullets) {
+    ctx.fillStyle = '#FFD700'; rr(b.x, b.y, 5, 14, 2); ctx.fill();
+  }
+
+  // 파티클
+  for (const p of particles) {
+    ctx.globalAlpha = p.life / 18;
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // 적
+  for (const e of enemies) {
+    if (!e.alive) continue;
+    ctx.fillStyle = '#CC3333'; rr(e.x, e.y, e.w, e.h); ctx.fill();
+    ctx.strokeStyle = '#FF6666'; ctx.lineWidth = 1; ctx.stroke();
+    label('적', e.x, e.y - 1, 8);
+    // 애셋 레이블 (작은 힌트)
+    ctx.font = '7px monospace'; ctx.fillStyle = '#FF9999';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('[적 스프라이트]', e.x, e.y + 9);
+  }
+
+  // 플레이어
+  ctx.fillStyle = '#2288CC'; rr(player.x, player.y, player.w, player.h); ctx.fill();
+  ctx.strokeStyle = '#55AAEE'; ctx.lineWidth = 1.5; ctx.stroke();
+  label('플레이어', player.x, player.y - 2, 9);
+  ctx.font = '7px monospace'; ctx.fillStyle = '#AADDFF';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('[캐릭터 스프라이트]', player.x, player.y + 9);
+}
+
+function drawGates() {
+  // 딤
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold 20px monospace'; ctx.fillStyle = '#FFD700';
+  ctx.fillText('⚡ 게이트 선택 ⚡', W/2, H/2 - 80);
+
+  for (const g of gates) {
+    ctx.fillStyle = g.color; rr(g.x, g.y, g.w, g.h, 12); ctx.fill();
+    ctx.strokeStyle = '#FFF'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.font = 'bold 18px monospace'; ctx.fillStyle = '#FFF';
+    ctx.fillText(g.label, g.x, g.y - 10);
+    ctx.font = '12px monospace'; ctx.fillStyle = '#EEE';
+    ctx.fillText(g.sub, g.x, g.y + 12);
+    ctx.font = '10px monospace'; ctx.fillStyle = '#CCC';
+    ctx.fillText('[게이트 아트워크]', g.x, g.y + 28);
+  }
+}
+
+function drawOverlay(title, hint, col) {
+  ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold 32px monospace'; ctx.fillStyle = col;
+  ctx.fillText(title, W/2, H/2 - 40);
+  ctx.font = '18px monospace'; ctx.fillStyle = '#FFF';
+  ctx.fillText('SCORE : ' + score, W/2, H/2 + 5);
+  ctx.font = '14px monospace'; ctx.fillStyle = '#AAA';
+  ctx.fillText(hint, W/2, H/2 + 42);
+}
+
+// ── 루프 ─────────────────────────────────────────
+function loop(now) {
+  update(now);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
