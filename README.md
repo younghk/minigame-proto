@@ -4,11 +4,14 @@
 
 ## Current focus
 - 광고에서 보이는 미니게임의 실제 버전 만들기
-- 첫 게임 후보: 레인 슈터 + 게이트 러너 하이브리드
-- 현재 단계: 기획 정리, 테마 방향 압축
+- 첫 게임: 궁수 기반 2.5D 레인 슈터 (게이트 러너 메커닉 유지)
+- 스택: Unity 6 LTS + URP 3D, Claude Code × unity-mcp 워크플로우
+- 현재 단계: Unity 프로젝트 초기 세팅, 첫 스파이크
 
 ## Structure
-- `docs/project-overview.md`: 프로젝트 전체 개요
+- `unity/`: Unity 프로젝트 (본 개발)
+- `poc-web/`: 초기 웹 Canvas POC (reference, 아카이브)
+- `docs/project-overview.md`: 프로젝트 전체 개요 ※ 스택 섹션은 Unity로 업데이트 예정
 - `docs/theme-direction.md`: 게임 테마 방향 정리
 
 ## Note
