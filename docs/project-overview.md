@@ -10,9 +10,9 @@
 
 ## Platform
 - 모바일 앱 우선
-- Expo / React Native 기반
+- **Unity 6 LTS + URP 3D** (Claude Code × unity-mcp 워크플로우)
 - iOS / Android 동시 전개
-- 웹은 필요 시 프로토타입 또는 랜딩 용도로만 검토
+- 웹은 필요 시 프로토타입 또는 랜딩 용도로만 검토 (기존 HTML5 POC는 `poc-web/`)
 
 ## Monetization
 - 주 수익: AdMob 보상형 비디오
@@ -30,14 +30,18 @@
 - 보스 클리어 후 보상
 
 ## Tech stack
-- Expo
-- React Native
-- TypeScript
-- Zustand
-- react-native-skia 또는 react-native-game-engine
-- react-native-google-mobile-ads
-- react-native-iap
-- Firebase Analytics
+- Unity 6 LTS (6000.4.2f1)
+- URP (Universal Render Pipeline) — 모바일 2.5D
+- C# + MonoBehaviour
+- Input System (new, Pointer 기반)
+- UGUI (Legacy UI.Text + Canvas) — 런타임 빌드
+- Google Mobile Ads Unity plugin (AdMob) — Phase 이후
+- Unity IAP — Phase 이후
+- Unity Analytics / Firebase Analytics — Phase 이후
+
+**개발 도구**
+- Claude Code × unity-mcp (Coplay, HTTP transport, localhost:8080)
+- MCP 툴로 스크립트 생성·컴파일 체크·씬/프리팹 조작·Play 모드 검증 자동화
 
 ## Immediate next topics
 1. 테마 확정

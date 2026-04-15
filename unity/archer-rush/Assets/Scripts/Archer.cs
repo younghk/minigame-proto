@@ -5,6 +5,7 @@ public class Archer : MonoBehaviour
     public GameObject arrowPrefab;
     public Transform firePoint;
     public float fireInterval = 0.8f;
+    public int arrowDamage = 1;
     public float range = 20f;
 
     float nextFireTime;
@@ -34,7 +35,9 @@ public class Archer : MonoBehaviour
         dir.Normalize();
 
         Vector3 origin = firePoint != null ? firePoint.position : archerCenter + dir * 1.2f;
-        Instantiate(arrowPrefab, origin, Quaternion.LookRotation(dir));
+        var arrowGo = Instantiate(arrowPrefab, origin, Quaternion.LookRotation(dir));
+        var arrow = arrowGo.GetComponent<Arrow>();
+        if (arrow != null) arrow.damage = arrowDamage;
         nextFireTime = Time.time + fireInterval;
     }
 }
