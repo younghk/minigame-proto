@@ -1,15 +1,13 @@
-# Game Sideproject
+# Web POC (archive)
 
-영원의 모바일/웹 게임 사이드프로젝트 작업 디렉토리.
+친구와 기획 논의용으로 만든 HTML5 Canvas 단일 파일 프로토타입. 버전 v0.1 ~ v0.3.
 
-## Current focus
-- 광고에서 보이는 미니게임의 실제 버전 만들기
-- 첫 게임 후보: 레인 슈터 + 게이트 러너 하이브리드
-- 현재 단계: 기획 정리, 테마 방향 압축
+실제 개발은 Unity로 전환되어 `../unity/`에서 진행됩니다. 이 폴더는 reference로만 남깁니다.
 
-## Structure
-- `docs/project-overview.md`: 프로젝트 전체 개요
-- `docs/theme-direction.md`: 게임 테마 방향 정리
+## 실행
+`index.html`을 브라우저로 바로 열거나, GitHub Pages 배포본을 이용.
 
-## Note
-장기 메모와 회고는 Obsidian/memory 쪽에 남고, 실제 프로젝트 산출물은 여기서 관리한다.
+## 히스토리
+- v0.1: Canvas 단일 파일 초기 세팅
+- v0.2: 엔드리스 레인 러너 (3레인, 게이트, 무한 스크롤)
+- v0.3: 2레인 단순화 (적/게이트 이진 선택)
