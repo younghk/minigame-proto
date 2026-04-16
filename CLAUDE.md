@@ -42,6 +42,9 @@ minigame-proto/
 - **execute_code**: codedom 기본(C# 6). `?.` 연산자, local function 불가. `System.Func<>` 람다 사용.
 - **manage_components add**: 타입 lookup 캐시 이슈로 간헐적 실패 → `execute_code`로 `AddComponent` 직접 호출이 더 안정적.
 - **MCP transport**: stdio 모드는 Unity 브릿지 discovery 실패 — HTTP 모드(`localhost:8080/mcp`) 사용.
+- **Gate 충돌 감지**: Collider 기반 OnTriggerEnter 미사용. `Update()` 내 수동 AABB 체크(`triggerXHalf`, `triggerZHalf`)로 구현 — Gate에 Rigidbody 없으므로 의도적 선택.
+- **Enemy.archerTransform**: `GameObject.Find("Archer")` 이름 하드코딩. 플레이어 오브젝트 이름 변경 시 접촉 데미지 미발동. 리팩터 대상.
+- **Archer 타겟팅**: `FindObjectsByType<Enemy>()` 매 프레임 호출 (캐싱 없음). 적이 수십 마리 이상이면 성능 이슈 예상 — 최적화 전에 프로파일러 확인.
 
 ## 현재 상태
 MVP 루프 완성: 드래그 이동 → 자동 사격 → 적 웨이브 → 게이트 2택 버프 → HP → 게임 오버 → 재시작.
